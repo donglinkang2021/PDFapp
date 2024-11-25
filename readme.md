@@ -11,6 +11,7 @@
 - 数据库: 打算直接使用csv文件存储
 - 服务器: ollama的API
 - 语言: python
+- 前端：streamlit
 
 ## 环境配置
 
@@ -21,4 +22,10 @@ python -m venv venv
 source venv/bin/activate # windows下使用venv\Scripts\activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+```
+
+## 快速启动
+
+```shell
+streamlit run app.py
 ```
