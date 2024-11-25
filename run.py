@@ -3,6 +3,9 @@ from src.app import PDFApp
 from src.utils import list_model
 import tempfile
 import os
+import plotly.graph_objects as go
+from sklearn.manifold import TSNE
+import numpy as np
 
 st.set_page_config(page_title="PDF 语义搜索", layout="wide")
 st.title("PDF 语义搜索应用")
@@ -76,6 +79,61 @@ if uploaded_file:
             preview = chunk[:80] + "..." if len(chunk) > 80 else chunk
             with st.expander(f"结果 {i} - {preview}"):
                 st.write(chunk)
+
+        # 添加图谱展示
+        st.subheader("相似度图谱：")
+        
+        # 获取所有相关的 embeddings
+        query_embedding = st.session_state.pdf_app.querier.get_embedding(query)
+        chunk_idxs = st.session_state.pdf_app.querier.find_similar_chunks(query_embedding, st.session_state.pdf_app.embeddings, top_k)
+        chunk_embeddings = np.array([st.session_state.pdf_app.embeddings[idx] for idx in chunk_idxs])
+        all_embeddings = np.vstack([query_embedding, chunk_embeddings])
+        
+        # 使用 t-SNE 降维到2D，调整 perplexity 参数
+        n_samples = len(all_embeddings)
+        perplexity = min(30, n_samples - 1)  # 确保 perplexity 小于样本数
+        tsne = TSNE(
+            n_components=2,
+            random_state=42,
+            perplexity=perplexity,
+            max_iter=250
+        )
+        embeddings_2d = tsne.fit_transform(all_embeddings)
+        
+        # 创建图谱
+        fig = go.Figure()
+        
+        # 添加查询点
+        fig.add_trace(go.Scatter(
+            x=[embeddings_2d[0][0]],
+            y=[embeddings_2d[0][1]],
+            mode='markers+text',
+            marker=dict(size=15, color='red'),
+            text=['查询'],
+            textposition="top center",
+            name='查询'
+        ))
+        
+        # 添加文档块点
+        fig.add_trace(go.Scatter(
+            x=embeddings_2d[1:, 0],
+            y=embeddings_2d[1:, 1],
+            mode='markers+text',
+            marker=dict(size=10, color='blue'),
+            text=[f'结果 {i+1}' for i in range(len(results))],
+            textposition="top center",
+            name='文档块'
+        ))
+        
+        # 更新布局
+        fig.update_layout(
+            title="查询结果相似度可视化",
+            showlegend=True,
+            width=800,
+            height=600
+        )
+        
+        st.plotly_chart(fig)
 
 # 添加使用说明
 with st.sidebar:
