@@ -10,39 +10,88 @@ import numpy as np
 # 替换原有的图谱可视化代码
 def create_knowledge_graph(query, results, query_embedding, chunk_embeddings):
     # 创建网络图实例
-    net = Network(height="600px", width="100%", bgcolor="#ffffff", font_color="black")
+    net = Network(height="700px", width="100%", bgcolor="#f8f9fa", font_color="#2c3e50")
     
     # 添加查询节点
-    net.add_node(0, label="查询: " + query[:20] + "...", color="#ff0000", size=20)
+    net.add_node(0, label="查询: " + query[:20] + "...", 
+                 color="#e74c3c", size=25,
+                 shape='dot',
+                 font={'size': 16, 'face': 'Arial'})
     
-    # 计算相似度
+    # 计算所有嵌入之间的相似度矩阵
     chunk_embeddings = np.array(chunk_embeddings, dtype=np.float32)
     query_embedding = np.array(query_embedding, dtype=np.float32)
-    similarities = np.dot(chunk_embeddings, query_embedding.T).flatten()
     
-    # 添加文档块节点和边
-    for i, (chunk, sim) in enumerate(zip(results, similarities), 1):
-        # 添加节点
-        net.add_node(i, label=f"文档块 {i}\n{chunk[:30]}...", color="#0000ff", size=15)
+    # 计算查询与文档块的相似度
+    query_similarities = np.dot(chunk_embeddings, query_embedding.T).flatten()
+    
+    # 计算文档块之间的相似度矩阵
+    chunk_similarities = np.dot(chunk_embeddings, chunk_embeddings.T)
+    
+    # 添加文档块节点
+    for i, (chunk, sim) in enumerate(zip(results, query_similarities), 1):
+        net.add_node(i, 
+                     label=f"文档块 {i}\n{chunk[:30]}...", 
+                     color="#3498db",
+                     size=20,
+                     shape='dot',
+                     font={'size': 14, 'face': 'Arial'})
         
-        # 添加边，使用相似度作为边的宽度
-        width = float(sim) * 5  # 调整边的宽度
-        net.add_edge(0, i, width=width, title=f"相似度: {sim:.2f}")
+        # 添加与查询节点的边
+        width = float(sim) * 8  # 增加边的宽度
+        net.add_edge(0, i, width=width, 
+                    title=f"相似度: {sim:.3f}",
+                    color='rgba(231, 76, 60, 0.5)')
     
-    # 设置物理布局参数
+    # 为每个文档块节点添加与其他节点的边（保留前5个最相似的）
+    for i in range(len(results)):
+        # 获取当前节点与其他节点的相似度
+        similarities = chunk_similarities[i]
+        # 创建索引-相似度对，并排除自身
+        pairs = [(j, s) for j, s in enumerate(similarities) if j != i]
+        # 按相似度排序并获取前5个
+        top_5 = sorted(pairs, key=lambda x: x[1], reverse=True)[:5]
+        
+        # 添加边
+        for j, sim in top_5:
+            if i < j:  # 避免重复添加边
+                width = float(sim) * 5
+                net.add_edge(i+1, j+1, 
+                            width=width,
+                            title=f"相似度: {sim:.3f}",
+                            color='rgba(52, 152, 219, 0.3)')
+    
+    # 优化物理布局参数
     net.set_options("""
     var options = {
+        "nodes": {
+            "font": {
+                "strokeWidth": 2,
+                "strokeColor": "#ffffff"
+            }
+        },
+        "edges": {
+            "smooth": {
+                "type": "continuous",
+                "forceDirection": "none"
+            }
+        },
         "physics": {
             "forceAtlas2Based": {
-                "gravitationalConstant": -50,
-                "centralGravity": 0.01,
-                "springLength": 100,
-                "springConstant": 0.08
+                "gravitationalConstant": -100,
+                "centralGravity": 0.015,
+                "springLength": 200,
+                "springConstant": 0.1,
+                "avoidOverlap": 0.8
             },
-            "maxVelocity": 50,
+            "maxVelocity": 30,
             "solver": "forceAtlas2Based",
-            "timestep": 0.35,
-            "stabilization": {"iterations": 150}
+            "timestep": 0.3,
+            "stabilization": {
+                "enabled": true,
+                "iterations": 200,
+                "updateInterval": 25
+            }
         }
     }
     """)
