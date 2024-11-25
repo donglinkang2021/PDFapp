@@ -1,6 +1,5 @@
 from ollama import Client
 from tqdm import tqdm
-from ._types import EmbeddingResponse
 from typing import List
 
 class Embedder:
@@ -14,8 +13,7 @@ class Embedder:
         for i in tqdm(range(0, len(chunks), self.batch_size)):
             chunks_batch = chunks[i:i + self.batch_size]
             response = self.client.embed(self.model, chunks_batch)
-            pack_data = EmbeddingResponse.from_dict(response)
-            embeddings.extend(pack_data.embeddings)
+            embeddings.extend(response.embeddings)
         assert len(chunks) == len(embeddings), \
             "Number of chunks and embeddings do not match."
         return embeddings
