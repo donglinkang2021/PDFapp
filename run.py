@@ -3,6 +3,116 @@ from src.app import PDFApp
 from src.utils import list_model
 import tempfile
 import os
+import webbrowser
+from pyvis.network import Network
+import numpy as np
+
+# 替换原有的图谱可视化代码
+def create_knowledge_graph(query, results, query_embedding, chunk_embeddings):
+    # 创建网络图实例
+    net = Network(height="700px", width="100%", bgcolor="transparent", font_color="#2c3e50")
+    
+    # 添加查询节点
+    net.add_node(0, label="查询: " + query[:20] + "...", 
+                 color="#e74c3c", size=25,
+                 shape='dot',
+                 font={'size': 16, 'face': 'Arial'})
+    
+    # 计算所有嵌入之间的相似度矩阵
+    chunk_embeddings = np.array(chunk_embeddings, dtype=np.float32)
+    query_embedding = np.array(query_embedding, dtype=np.float32)
+    
+    # 计算查询与文档块的相似度
+    query_similarities = np.dot(chunk_embeddings, query_embedding.T).flatten()
+    
+    # 计算文档块之间的相似度矩阵
+    chunk_similarities = np.dot(chunk_embeddings, chunk_embeddings.T)
+    
+    # 添加文档块节点
+    for i, (chunk, sim) in enumerate(zip(results, query_similarities), 1):
+        net.add_node(i, 
+                     label=f"文档块 {i}\n{chunk[:30]}...", 
+                     color="#3498db",
+                     size=20,
+                     shape='dot',
+                     font={'size': 14, 'face': 'Arial'})
+        
+        # 添加与查询节点的边
+        width = float(sim) * 8  # 增加边的宽度
+        net.add_edge(0, i, width=width, 
+                    title=f"相似度: {sim:.3f}",
+                    color='rgba(231, 76, 60, 0.5)')
+    
+    # 为每个文档块节点添加与其他节点的边（保留前5个最相似的）
+    for i in range(len(results)):
+        # 获取当前节点与其他节点的相似度
+        similarities = chunk_similarities[i]
+        # 创建索引-相似度对，并排除自身
+        pairs = [(j, s) for j, s in enumerate(similarities) if j != i]
+        # 按相似度排序并获取前5个
+        top_5 = sorted(pairs, key=lambda x: x[1], reverse=True)[:5]
+        
+        # 添加边
+        for j, sim in top_5:
+            if i < j:  # 避免重复添加边
+                width = float(sim) * 5
+                net.add_edge(i+1, j+1, 
+                            width=width,
+                            title=f"相似度: {sim:.3f}",
+                            color='rgba(52, 152, 219, 0.3)')
+    
+    # 优化物理布局参数
+    net.set_options("""
+    var options = {
+        "nodes": {
+            "font": {
+                "strokeWidth": 2,
+                "strokeColor": "#ffffff"
+            }
+        },
+        "edges": {
+            "smooth": false,
+            "width": 2,
+            "color": {
+                "inherit": false
+            },
+            "shadow": false
+        },
+        "physics": {
+            "forceAtlas2Based": {
+                "gravitationalConstant": -150,
+                "centralGravity": 0.01,
+                "springLength": 250,
+                "springConstant": 0.08,
+                "avoidOverlap": 1
+            },
+            "maxVelocity": 25,
+            "solver": "forceAtlas2Based",
+            "timestep": 0.3,
+            "stabilization": {
+                "enabled": true,
+                "iterations": 250,
+                "updateInterval": 25
+            }
+        },
+        "interaction": {
+            "hover": true,
+            "zoomView": true,
+            "dragView": true
+        },
+        "configure": {
+            "enabled": false
+        },
+        "canvas": {
+            "background": "transparent"
+        }
+    }
+    """)
+    
+    # 生成临时HTML文件
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.html', mode='w', encoding='utf-8') as f:
+        net.save_graph(f.name)
+        return f.name
 
 st.set_page_config(page_title="PDF 语义搜索", layout="wide")
 st.title("PDF 语义搜索应用")
@@ -77,6 +187,20 @@ if uploaded_file:
             with st.expander(f"结果 {i} - {preview}"):
                 st.write(chunk)
 
+        # 添加知识图谱
+        st.subheader("知识图谱：")
+        query_embedding = st.session_state.pdf_app.querier.get_embedding(query)
+        chunk_idxs = st.session_state.pdf_app.querier.find_similar_chunks(query_embedding, st.session_state.pdf_app.embeddings, top_k)
+        chunk_embeddings = [st.session_state.pdf_app.embeddings[idx] for idx in chunk_idxs]
+        
+        # 生成图谱
+        html_path = create_knowledge_graph(query, results, query_embedding, chunk_embeddings)
+        
+        # 使用 HTML 组件显示图谱
+        with open(html_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        st.components.v1.html(html_content, height=600)
+
 # 添加使用说明
 with st.sidebar:
     st.markdown("---")
@@ -85,7 +209,7 @@ with st.sidebar:
     1. 在侧边栏配置参数
     2. 上传 PDF 文件
     3. 输入查询内容
-    4. 点击搜索按钮查看结果
+    4. 回车查看搜索结果
     """)
 
 # streamlit run run.py
