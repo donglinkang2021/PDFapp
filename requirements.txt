@@ -3,5 +3,4 @@ tqdm
 ollama
 streamlit
 pandas
-plotly
-scikit-learn
+pyvis

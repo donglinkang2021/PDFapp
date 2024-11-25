@@ -3,9 +3,54 @@ from src.app import PDFApp
 from src.utils import list_model
 import tempfile
 import os
-import plotly.graph_objects as go
-from sklearn.manifold import TSNE
+import webbrowser
+from pyvis.network import Network
 import numpy as np
+
+# 替换原有的图谱可视化代码
+def create_knowledge_graph(query, results, query_embedding, chunk_embeddings):
+    # 创建网络图实例
+    net = Network(height="600px", width="100%", bgcolor="#ffffff", font_color="black")
+    
+    # 添加查询节点
+    net.add_node(0, label="查询: " + query[:20] + "...", color="#ff0000", size=20)
+    
+    # 计算相似度
+    chunk_embeddings = np.array(chunk_embeddings, dtype=np.float32)
+    query_embedding = np.array(query_embedding, dtype=np.float32)
+    similarities = np.dot(chunk_embeddings, query_embedding.T).flatten()
+    
+    # 添加文档块节点和边
+    for i, (chunk, sim) in enumerate(zip(results, similarities), 1):
+        # 添加节点
+        net.add_node(i, label=f"文档块 {i}\n{chunk[:30]}...", color="#0000ff", size=15)
+        
+        # 添加边，使用相似度作为边的宽度
+        width = float(sim) * 5  # 调整边的宽度
+        net.add_edge(0, i, width=width, title=f"相似度: {sim:.2f}")
+    
+    # 设置物理布局参数
+    net.set_options("""
+    var options = {
+        "physics": {
+            "forceAtlas2Based": {
+                "gravitationalConstant": -50,
+                "centralGravity": 0.01,
+                "springLength": 100,
+                "springConstant": 0.08
+            },
+            "maxVelocity": 50,
+            "solver": "forceAtlas2Based",
+            "timestep": 0.35,
+            "stabilization": {"iterations": 150}
+        }
+    }
+    """)
+    
+    # 生成临时HTML文件
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.html', mode='w', encoding='utf-8') as f:
+        net.save_graph(f.name)
+        return f.name
 
 st.set_page_config(page_title="PDF 语义搜索", layout="wide")
 st.title("PDF 语义搜索应用")
@@ -80,60 +125,19 @@ if uploaded_file:
             with st.expander(f"结果 {i} - {preview}"):
                 st.write(chunk)
 
-        # 添加图谱展示
-        st.subheader("相似度图谱：")
-        
-        # 获取所有相关的 embeddings
+        # 添加知识图谱
+        st.subheader("知识图谱：")
         query_embedding = st.session_state.pdf_app.querier.get_embedding(query)
         chunk_idxs = st.session_state.pdf_app.querier.find_similar_chunks(query_embedding, st.session_state.pdf_app.embeddings, top_k)
-        chunk_embeddings = np.array([st.session_state.pdf_app.embeddings[idx] for idx in chunk_idxs])
-        all_embeddings = np.vstack([query_embedding, chunk_embeddings])
+        chunk_embeddings = [st.session_state.pdf_app.embeddings[idx] for idx in chunk_idxs]
         
-        # 使用 t-SNE 降维到2D，调整 perplexity 参数
-        n_samples = len(all_embeddings)
-        perplexity = min(30, n_samples - 1)  # 确保 perplexity 小于样本数
-        tsne = TSNE(
-            n_components=2,
-            random_state=42,
-            perplexity=perplexity,
-            max_iter=250
-        )
-        embeddings_2d = tsne.fit_transform(all_embeddings)
+        # 生成图谱
+        html_path = create_knowledge_graph(query, results, query_embedding, chunk_embeddings)
         
-        # 创建图谱
-        fig = go.Figure()
-        
-        # 添加查询点
-        fig.add_trace(go.Scatter(
-            x=[embeddings_2d[0][0]],
-            y=[embeddings_2d[0][1]],
-            mode='markers+text',
-            marker=dict(size=15, color='red'),
-            text=['查询'],
-            textposition="top center",
-            name='查询'
-        ))
-        
-        # 添加文档块点
-        fig.add_trace(go.Scatter(
-            x=embeddings_2d[1:, 0],
-            y=embeddings_2d[1:, 1],
-            mode='markers+text',
-            marker=dict(size=10, color='blue'),
-            text=[f'结果 {i+1}' for i in range(len(results))],
-            textposition="top center",
-            name='文档块'
-        ))
-        
-        # 更新布局
-        fig.update_layout(
-            title="查询结果相似度可视化",
-            showlegend=True,
-            width=800,
-            height=600
-        )
-        
-        st.plotly_chart(fig)
+        # 使用 HTML 组件显示图谱
+        with open(html_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        st.components.v1.html(html_content, height=600)
 
 # 添加使用说明
 with st.sidebar:
@@ -143,7 +147,7 @@ with st.sidebar:
     1. 在侧边栏配置参数
     2. 上传 PDF 文件
     3. 输入查询内容
-    4. 点击搜索按钮查看结果
+    4. 回车查看搜索结果
     """)
 
 # streamlit run run.py
