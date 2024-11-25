@@ -71,33 +71,34 @@ def create_knowledge_graph(query, results, query_embedding, chunk_embeddings):
             }
         },
         "edges": {
-            "smooth": {
-                "type": "continuous",
-                "forceDirection": "none"
-            }
+            "smooth": false,
+            "width": 2,
+            "color": {
+                "inherit": false
+            },
+            "shadow": false
         },
         "physics": {
             "forceAtlas2Based": {
-                "gravitationalConstant": -100,
-                "centralGravity": 0.015,
-                "springLength": 200,
-                "springConstant": 0.1,
-                "avoidOverlap": 0.8
+                "gravitationalConstant": -150,
+                "centralGravity": 0.01,
+                "springLength": 250,
+                "springConstant": 0.08,
+                "avoidOverlap": 1
             },
-            "maxVelocity": 30,
+            "maxVelocity": 25,
             "solver": "forceAtlas2Based",
             "timestep": 0.3,
             "stabilization": {
                 "enabled": true,
-                "iterations": 200,
+                "iterations": 250,
                 "updateInterval": 25
             }
         },
-        "manipulation": {
-            "enabled": false
-        },
         "interaction": {
-            "hover": true
+            "hover": true,
+            "zoomView": true,
+            "dragView": true
         },
         "configure": {
             "enabled": false
