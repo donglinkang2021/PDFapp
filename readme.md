@@ -27,5 +27,5 @@ pip install -r requirements.txt
 ## 快速启动
 
 ```shell
-streamlit run app.py
+streamlit run run.py
 ```
