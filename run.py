@@ -10,7 +10,7 @@ import numpy as np
 # 替换原有的图谱可视化代码
 def create_knowledge_graph(query, results, query_embedding, chunk_embeddings):
     # 创建网络图实例
-    net = Network(height="700px", width="100%", bgcolor="#f8f9fa", font_color="#2c3e50")
+    net = Network(height="700px", width="100%", bgcolor="transparent", font_color="#2c3e50")
     
     # 添加查询节点
     net.add_node(0, label="查询: " + query[:20] + "...", 
@@ -92,6 +92,18 @@ def create_knowledge_graph(query, results, query_embedding, chunk_embeddings):
                 "iterations": 200,
                 "updateInterval": 25
             }
+        },
+        "manipulation": {
+            "enabled": false
+        },
+        "interaction": {
+            "hover": true
+        },
+        "configure": {
+            "enabled": false
+        },
+        "canvas": {
+            "background": "transparent"
         }
     }
     """)
